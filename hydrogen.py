@@ -15,14 +15,10 @@ type Psi = Callable[
     Complex[torch.Tensor, "num_walkers"] | Float[torch.Tensor, "num_walkers"],
 ]
 type Position = Float[torch.Tensor, "3 #num_walkers"]
-
-type E_loc = Float[torch.Tensor, "num_walkers"] | Complex[torch.Tensor, "num_walkers"]
-
-type PositionFunction = Callable[
-    [Position, E_loc],
-    Float[torch.Tensor, "num_walkers"],
+type RealPositionFunction = Callable[[Position], Float[torch.Tensor, "num_walkers"]]
+type ComplexPositionFunction = Callable[
+    [Position], Complex[torch.Tensor, "num_walkers"]
 ]
-
 type PositionFunctionBuffer = Complex[
     torch.Tensor, "n_pos_functions, n_walkers"
 ] | Float[torch.Tensor, "n_pos_functions, n_walkers"]
@@ -35,6 +31,8 @@ class MarkovChain:
         r_min: Position,
         r_max: Position,
         n_walkers: int,
+        E_loc: RealPositionFunction,
+        d_ln_psi: RealPositionFunction,
     ):
         self.state: Position = torch.rand(3, n_walkers)
 
@@ -43,30 +41,13 @@ class MarkovChain:
         self.n_walkers: int = n_walkers
         self.r_min: Position = r_min.reshape(3, 1)
         self.r_max: Position = r_max.reshape(3, 1)
+        self.E_loc: RealPositionFunction = E_loc
+        self.d_ln_psi: RealPositionFunction = d_ln_psi
 
     def make_step(self, step_size: float):
         step: Position = torch.randn(3, self.n_walkers)
         step = step * (self.r_max - self.r_min) * step_size
         return step
-
-    def E_loc(self, position_samples: Position) -> Float[torch.Tensor, "num_walkers"]:
-        theta = self.psi.theta
-        alpha = theta[0]
-
-        r = torch.norm(position_samples, dim=0)
-
-        return -0.5 * alpha * (alpha - 2 / r) - 1 / r
-
-    def d_ln_psi(
-        self,
-        position_samples: Position,
-    ) -> Float[torch.Tensor, "num_walkers"]:
-        theta = self.psi.theta
-        alpha = theta[0]
-
-        r = torch.norm(position_samples, dim=0)
-
-        return -(r**2)
 
     def metropolis(self, step_size: float, calc_grad_terms: bool = False):
         proposed_step: Position = self.make_step(step_size)
@@ -100,7 +81,24 @@ class TrialPsi(nn.Module):
     def __init__(self, r_min: Position, r_max: Position, num_walkers: int):
         super(TrialPsi, self).__init__()
         self.theta = torch.rand(1) * 0.01
-        self.mc = MarkovChain(self, r_min, r_max, num_walkers)
+        self.mc = MarkovChain(
+            self, r_min, r_max, num_walkers, self.E_loc, self.d_ln_psi
+        )
+
+    def E_loc(self, position_samples: Position) -> Float[torch.Tensor, "num_walkers"]:
+        alpha = self.theta[0]
+        r = torch.norm(position_samples, dim=0)
+        return -0.5 * alpha * (alpha - 2 / r) - 1 / r
+
+    def d_ln_psi(
+        self,
+        position_samples: Position,
+    ) -> Float[torch.Tensor, "num_walkers"]:
+        alpha = self.theta[0]
+
+        r = torch.norm(position_samples, dim=0)
+
+        return -(r**2)
 
     def forward(self, x: Position) -> HilbertVector:
         return torch.exp(-self.theta[0] * torch.sum(x**2, axis=0))  # type: ignore
@@ -158,19 +156,19 @@ class TrialPsiOptimizer:
 
 
 def show_density(
-    psi: Psi,
+    psi: TrialPsi,
     warmup_steps: int,
     steps: int,
     step_size: float,
     warmup_step_size: float,
-    num_walkers: int,
     r_min: Position,
     r_max: Position,
     bins: int = 50,
+    show_paths: bool = False,
 ):
-    mc = MarkovChain(psi, r_min, r_max, num_walkers)
+    mc = psi.mc  # MarkovChain(psi, r_min, r_max, num_walkers)
+    mc.clear_state()
 
-    # These are computation chains
     warmup_coords = torch.zeros(3, mc.n_walkers, warmup_steps)
     coords = torch.zeros(3, mc.n_walkers, steps)
 
@@ -182,7 +180,7 @@ def show_density(
     for i in tqdm(range(steps)):
         coords[:, :, i] = mc.metropolis(step_size)
 
-    if steps * num_walkers < 10000:
+    if show_paths:
         fig = go.Figure()
 
         for i in range(steps):
