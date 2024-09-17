@@ -1,19 +1,21 @@
-from jaxtyping import Array, Float, Integer, Complex
+from jaxtyping import Complex, Float, Int
 from typing import Callable
 import torch
 
-type HilbertVector = Complex[torch.Tensor, "num_walkers"] | Float[
-    torch.Tensor, "num_walkers"
-]
-type Psi = Callable[
-    [Float[torch.Tensor, "3 num_walkers"]],
-    Complex[torch.Tensor, "num_walkers"] | Float[torch.Tensor, "num_walkers"],
-]
-type Position = Float[torch.Tensor, "3 #num_walkers"]
-type RealPositionFunction = Callable[[Position], Float[torch.Tensor, "num_walkers"]]
-type ComplexPositionFunction = Callable[
-    [Position], Complex[torch.Tensor, "num_walkers"]
-]
-type PositionFunctionBuffer = Complex[
-    torch.Tensor, "n_pos_functions, n_walkers"
-] | Float[torch.Tensor, "n_pos_functions, n_walkers"]
+ComplexFloat = Complex[torch.Tensor, "num_walkers"]
+ComplexFloatGrad = Complex[torch.Tensor, "num_walkers dim_theta"]
+ComplexFloatSingle = Complex[torch.Tensor, "1"]
+ComplexFloatGradSingle = Complex[torch.Tensor, "dim_theta"]
+StateTensor = Int[torch.Tensor, "num_walkers"]
+
+Psi_Callable = Callable[[StateTensor], ComplexFloat]
+E_loc_Callable = Callable[[StateTensor, ComplexFloat], ComplexFloatSingle]
+d_ln_psi_Callable = Callable[[StateTensor, ComplexFloat], ComplexFloatGrad]
+ProbDistTensor = Float[torch.Tensor, "num_walkers"]
+
+Position = Float[torch.Tensor, "3 num_walkers"]
+HilbertVector = (
+    Complex[torch.Tensor, "num_walkers"] | Float[torch.Tensor, "num_walkers"]
+)
+RealPositionFunction = Callable[[Position], Float[torch.Tensor, "num_walkers"]]
+Psi = Callable[[Position], HilbertVector]
