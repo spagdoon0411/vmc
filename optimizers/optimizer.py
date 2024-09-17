@@ -1,5 +1,6 @@
 from atoms.hydrogen_psi import TrialPsi
 from tqdm import tqdm
+import torch
 
 
 class TrialPsiOptimizer:
@@ -15,7 +16,10 @@ class TrialPsiOptimizer:
                 num_warmup, num_steps, step_size
             )
 
-            grad = 2 * (E_loc_d_ln_psi - E_loc * d_ln_psi)
+            grad = torch.real(
+                (E_loc_d_ln_psi + E_loc_d_ln_psi.conj())
+                - (E_loc) * (d_ln_psi + d_ln_psi.conj())
+            )
 
             self.psi.theta -= self.lr * grad
 
