@@ -23,6 +23,10 @@ class TrialPsiOptimizer:
 
             self.psi.theta -= self.lr * grad
 
+            torch.set_printoptions(precision=4)
+
             pbar.set_description(
-                f"Energy: {E_loc.item():.4f} - Theta: {self.psi.theta.item():.4f} - Grad: {grad.item():.4f}"
+                f"Energy: {E_loc} - Theta: {self.psi.theta} - Grad: {grad}"
             )
+
+        torch.set_printoptions(profile="default")
