@@ -1,5 +1,6 @@
 from markov.position_markov import MarkovChain
-from my_types.tensor_types import Float, HilbertVector, Position
+from my_types.tensor_types import HilbertVector, Position
+from jaxtyping import Float
 import torch
 from torch import nn
 
